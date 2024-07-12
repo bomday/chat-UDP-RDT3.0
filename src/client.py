@@ -48,12 +48,38 @@ def convert_string_to_txt(client_port, string):
     # Retornando o caminho do arquivo
     return path_file
 
+def calculate_checksum(message):
+    # Inicializa a soma
+    sum = 0
+
+    # Faz soma de mensagem em pares de bytes (16 bits)
+    for i in range(0, len(message), 2):
+        # Extrai dois bytes e faz a soma no formato de 16 bits
+        if i + 1 < len(message):
+            two_bytes = (message[i] << 8) + message[i + 1]
+        else:
+            two_bytes = message[i] << 8
+
+        # Soma os pares de bytes
+        sum += two_bytes
+
+        # Adiciona carry over se a soma for maior que 16 bits
+        # (sum & 0xFFFF) garante a separação dos bits menos significativos, ou seja, mais a direita
+        # (sum >> 16) garante a separação dos excedentes
+        sum = (sum & 0xFFFF) + (sum >> 16)
+
+    # Calcula o complemento de 1 da soma
+    checksum = ~sum & 0xFFFF
+    return checksum
+
 # Função de recebimento de pacotes
 def receive():    
     while True:
         received_encoded_message, _ = client.recvfrom(c.BUFF_SIZE)
-        received_message = received_encoded_message.decode()
-        print(received_message)
+        message = received_encoded_message.decode()
+        checksum = calculate_checksum(received_encoded_message)
+        print(f"Received message: {message}, checksum {checksum}")
+        print(message)
 
 #    ack_expected = client_ack_seq[0]
 #
@@ -103,9 +129,13 @@ while True:
             is_conected = True 
 
         for fragment in range(0, msg_size, c.FRAG_SIZE):
-            # Envia mensagem para Servidor
-            client.sendto(message_file, (client_ip, c.SERVER_ADRR[1]))
-            print("Sended data: CLIENT")
+            # Calcula limite do fragmento
+            end_fragment = min(fragment + c.FRAG_SIZE, msg_size)
+            message = message_file[fragment:end_fragment]
+            checksum = calculate_checksum(message)
+            # Envia fragmentos da mensagem para o Servidor
+            client.sendto(message, (client_ip, c.SERVER_ADRR[1]))
+            print(f"Sended data: CLIENT, fragment {fragment//c.FRAG_SIZE + 1}, checksum {checksum}")
 
         if message == "bye":
             is_conected = False

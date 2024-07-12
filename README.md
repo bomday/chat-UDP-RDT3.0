@@ -22,13 +22,6 @@ Projeto composto por duas etapas:
             <li><a href="#github">GitHub</a></li>
         </ul>
         </li>
-        <li>
-        <a href="#imagens">Imagens</a>
-        <ul>
-            <li><a href="#figura0">Figura 0</a></li>
-        </ul>
-        </li>
-        <li><a href="#colaboradores">Colaboradores</a></li>
         <li><a href="#contatos">Contatos</a></li>
     </ol>
 </details>
@@ -91,66 +84,13 @@ Linguagem de programação Python
 ### GitHub
 
 Link para o repositório: 
-https://github.com/Dev-JoseRonaldo/real-time-udp-chat.git
+https://github.com/bomday/chat-UDP-RDT3.0
 
 <p align="right">(<a href="#readme-top">voltar ao topo</a>)</p>
-
-## Imagens
-
-### <p id="figura0" align="center">Figura 0</p>
-
-<p align="center">
-    <img alt="Tela de Início" src="images/figure0.png" width="80%">
-</p>
-
-<p align="right">(<a href="#readme-top">voltar ao topo</a>)</p>
-
-## Colaboradores
-
-<table align="center">
-  <tr>
-    <td align="center">
-      <a href="https://github.com/bomday">
-        <img src="https://avatars.githubusercontent.com/u/66028004?v=4" width="200px;" border-radius="50%;" alt="Foto do Colaborador"/><br>
-        <sub><b>Dayane Lima</b></sub>
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/Dev-JoseRonaldo">
-        <img src="https://avatars.githubusercontent.com/u/83667469?v=4" width="200px;" border-radius="50%;" alt="Foto do Colaborador"/><br>
-        <sub><b>José Ronaldo</b></sub>
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/luiz-linkezio">
-        <img src="https://avatars.githubusercontent.com/u/125787137?v=4" width="200px;" border-radius="50%;" alt="Foto do Colaborador"/><br>
-        <sub><b>Luiz Henrique</b></sub>
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/Mariana-Marinho">
-        <img src="https://avatars.githubusercontent.com/u/83255127?v=4" width="200px;" border-radius="50%;" alt="Foto do Colaborador"/><br>
-        <sub><b>Mariana Marinho</b></sub>
-      </a>
-    </td>
-  </tr>
-</table>
 
 ## Contatos
 #### Dayane Lima
 - Linkedin: https://www.linkedin.com/in/dayane-lima-5b2558199/
 - Email: dayanecamilelima@gmail.com 
-  
-#### José Ronaldo
-- Linkedin: https://www.linkedin.com/in/devjoseronaldo/
-- Email: dev.joseronaldo@gmail.com
-
-#### Luiz Henrique
-- Linkedin: https://www.linkedin.com/in/lhbas/
-- Email: henriqueb999@yahoo.com.br
-
-#### Mariana Marinho 
-- Linkedin: https://www.linkedin.com/in/mariana--marinho/
-- Email: mmsa@cin.ufpe.br
 
 <p align="right">(<a href="#readme-top">voltar ao topo</a>)</p>
