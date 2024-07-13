@@ -1,10 +1,8 @@
 # Importando bibliotecas python 
-import math
 import socket # Cria sockets par comunicação em uma rede
 import random # Possibilita gerar números aleatórios
+import struct # Possibilita empacotar e desempacotar dados binários
 import threading # Cria threads, que são úteis para executar operações simultâneas
-from threading import Lock  # Importa a classe Lock do módulo threading para sincronização.
-from time import time  # Importa a função time do módulo time para medir o tempo.
 
 # Importando arquivos do código
 import utils.constants as c
@@ -12,11 +10,13 @@ from utils.init import init
 
 # Inicializando
 clients_port = set() # Armazena clients' port existentes
-client_ack_seq = [0, 0] # Armazena ack e seq number de cada cliente
-data_lock = Lock()  # Cria um bloqueio (lock) para evitar acesso simultâneo a variáveis compartilhadas entre as threads.
+ack = 0 #Armazena ack do cliente
+seq = 0 # Armazena seq number do cliente
 nickname = "" # Nickname do usuário
 msg_count = 0 # Número de arquivos txt enviados por socket
 is_conected = False # Conexão cliente com servidor
+ack_received = False # Ack recebido
+server_msg_received = [] # Guarda mensagem recebida do servidor
 
 # Criação do socket UDP
 client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -38,7 +38,7 @@ def convert_string_to_txt(client_port, string):
     global msg_count
 
     file_name = f'{client_port}{msg_count}'
-    path_file = f"./udp-ajustado/data/client/{file_name}.txt"
+    path_file = f"./data/client/{file_name}.txt" 
     msg_count += 1
 
     # Salvando string em arquivo .txt
@@ -64,8 +64,6 @@ def calculate_checksum(message):
         sum += two_bytes
 
         # Adiciona carry over se a soma for maior que 16 bits
-        # (sum & 0xFFFF) garante a separação dos bits menos significativos, ou seja, mais a direita
-        # (sum >> 16) garante a separação dos excedentes
         sum = (sum & 0xFFFF) + (sum >> 16)
 
     # Calcula o complemento de 1 da soma
@@ -73,18 +71,60 @@ def calculate_checksum(message):
     return checksum
 
 # Função de recebimento de pacotes
-def receive():    
-    while True:
-        received_encoded_message, _ = client.recvfrom(c.BUFF_SIZE)
-        message = received_encoded_message.decode()
-        checksum = calculate_checksum(received_encoded_message)
-        print(f"Received message: {message}, checksum {checksum}")
-        print(message)
+def receive():  
+    global ack, seq, ack_received, server_msg_received 
 
-#    ack_expected = client_ack_seq[0]
-#
-#    if received_message == ack_expected:
-#        client_ack_seq[0] = '1' if (client_ack_seq[0] == '0') else '0'  # Alterna o seq num do pacote
+    while True:
+        received_encoded_message, _ = client.recvfrom(c.BUFF_SIZE) # Recebe mensagem do servidor
+        header = received_encoded_message[:c.HEADER_SIZE] # Separando o Header
+        message_received = received_encoded_message[c.HEADER_SIZE:] # Separando a mensagem
+        (frag_index, frag_count, seq_recv, ack_recv, checksum) = struct.unpack('!IIIII', header) # Desempacotando o header
+
+        checksum_check = calculate_checksum(message_received) # Calcula checksum da mensagem recebida
+        message = message_received.decode() # Decodifica mensagem
+
+        # Confere recebimento de ack
+        if message == '':
+            # Desativar o timeout após receber ack da mensagem
+            client.settimeout(None)
+
+            # Confere se é checksum e ack esperado
+            if (checksum_check == checksum) and (seq == ack_recv):
+                # Alterna o seq num para próximo pacote
+                seq = 1 if (seq == 0) else 0 
+
+            ack_received = True
+
+        # Confere recebimento de pacote   
+        else:
+            # Prepara lista para receber fragmentos de mensagens do servidor
+            if server_msg_received == []:
+                server_msg_received = [[] for i in range(frag_count)]
+
+            # Confere se é checksum e pacote esperado
+            if (checksum_check == checksum) and (seq_recv == ack):
+                server_msg_received[frag_index].append(message) # Adiciona mensagem recebida a lista de fragmentos para mensagem completa se não for pacote duplicado
+                ack_send = ack
+                ack = 1 if (ack == 0) else 0 # Alterna o ack para próximo pacote
+            
+            # Pacote corrompido ou duplicado
+            else: 
+                # Alterna o ack para pedir reenvio de pacote
+                ack_send = 1 if (ack_recv == 0) else 0
+            
+            message_ack = ''
+            message_ack_enconded = message_ack.encode()
+            checksum = calculate_checksum(message_ack_enconded) # Calcula checksum
+            header = struct.pack('!IIIII', 0, 1, seq, ack_send, checksum) # Estrutura o cabeçalho do pacote
+            pack = header + message_ack_enconded
+
+            client.sendto(pack, (client_ip, c.SERVER_ADRR[1]))
+
+            # Confere se lista com fragmentos da mensagem está completa
+            if not any(isinstance(sublist, list) and len(sublist) == 0 for sublist in server_msg_received):
+                joined_msg = ''.join(sum(server_msg_received, []))
+                print(joined_msg)
+                server_msg_received = []
 
 # Inicia uma thread para as funções de recebimento
 receive_thread = threading.Thread(target=receive)
@@ -128,34 +168,40 @@ while True:
             nickname = message[16:] 
             is_conected = True 
 
+        # Calcula número de fragmentos da mensagem
+        frag_count = msg_size//c.FRAG_SIZE + 1
+        # Calcula índice de pacotes para garantir entrega na ordem
+        frag_index = 0
+
         for fragment in range(0, msg_size, c.FRAG_SIZE):
-            # Calcula limite do fragmento
-            end_fragment = min(fragment + c.FRAG_SIZE, msg_size)
-            message = message_file[fragment:end_fragment]
-            checksum = calculate_checksum(message)
-            # Envia fragmentos da mensagem para o Servidor
-            client.sendto(message, (client_ip, c.SERVER_ADRR[1]))
-            print(f"Sended data: CLIENT, fragment {fragment//c.FRAG_SIZE + 1}, checksum {checksum}")
+            end_fragment = min(fragment + c.FRAG_SIZE, msg_size) # Calcula limite do fragmento
+            message = message_file[fragment:end_fragment+1] # Delimita mensagem a ser enviada no pacote
+            checksum = calculate_checksum(message) # Calcula checksum
+            header = struct.pack('!IIIII', frag_index, frag_count, seq, ack, checksum) # Estrutura o cabeçalho do pacote
+            pack = header + message
+            seq_sended = seq
+
+            while seq_sended == seq:
+                # Envia fragmentos da mensagem para o Servidor
+                try:
+                    # Ativar o timeout
+                    client.settimeout(c.TIMEOUT)
+
+                    client.sendto(pack, (client_ip, c.SERVER_ADRR[1]))
+
+                    # Aguarda receber ack da mensagem
+                    while not ack_received:
+                        pass
+                    
+                except socket.timeout:
+                    print("Timeout: Falha ao enviar mensagem")
+                except Exception as e:
+                    print(f"Erro enviando mensagem: {e}") 
+            
+            # Acrescenta índice para próximo pacote 
+            frag_index += 1
+            # Reseta ack recebido
+            ack_received = False
 
         if message == "bye":
             is_conected = False
-
-
-
-
-    #time_start = time()  # Armazena o tempo inicial do envio da mensagem
-    #for i in range(0, msg_size, c.FRAG_SIZE):
-    #    frag = encoded_message[i:i + c.FRAG_SIZE]
-    #    current_ack = client_ack_seq[0]
-    #
-    #    while client_ack_seq[0] == current_ack:
-    #        time_curr = time() # Armazena o tempo atual do envio da mensagem
-    #        if (time_curr - time_start >= c.TIMEOUT):  # Verifica se o tempo decorrido é maior que timeout
-    #            client.sendto(frag, (client_ip, c.SERVER_ADRR[1]))  # Reenvia a mensagem em caso de timeout
-    #            continue
-
-        # Define novo sequence number
-    #    seq_num = '1' if (client_ack_seq[1] == '0') else '0'  # Alterna o seq num do pacote
-    #    client_ack_seq[1] = seq_num
-
-    #    time_start = time()  # Reseta o tempo inicial
