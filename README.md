@@ -67,8 +67,6 @@ Linguagem de programação Python
 
 - `Datetime`: Manipula datas e horas.
 
-- `Math`: Fornece funções matemáticas avançadas.
-
 - `Queue`: Aplicamos a biblioteca _tkinter_ para criar interfaces gráficas de usuário (GUI).
   
 - `Random`: Utilizado para gerar números de porta aleatórios.
@@ -78,8 +76,6 @@ Linguagem de programação Python
 - `Struct`: Bilioteca que interpreta bytes como dados binários compactados.
 
 - `Threading`: Cria threads, que são úteis para executar operações simultâneas.
-
-- `Time`: Utilizado para aplicar timeout.
 
 ### GitHub
 
