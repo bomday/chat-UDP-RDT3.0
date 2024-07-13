@@ -35,15 +35,40 @@ def convert_string_to_txt(client_port, string):
     # Retornando o caminho do arquivo
     return path_file
 
+def calculate_checksum(message):
+    # Inicializa a soma
+    sum = 0
+
+    # Faz soma de mensagem em pares de bytes (16 bits)
+    for i in range(0, len(message), 2):
+        # Extrai dois bytes e faz a soma no formato de 16 bits
+        if i + 1 < len(message):
+            two_bytes = (message[i] << 8) + message[i + 1]
+        else:
+            two_bytes = message[i] << 8
+
+        # Soma os pares de bytes
+        sum += two_bytes
+
+        # Adiciona carry over se a soma for maior que 16 bits
+        # (sum & 0xFFFF) garante a separação dos bits menos significativos, ou seja, mais a direita
+        # (sum >> 16) garante a separação dos excedentes
+        sum = (sum & 0xFFFF) + (sum >> 16)
+
+    # Calcula o complemento de 1 da soma
+    checksum = ~sum & 0xFFFF
+    return checksum
+
 # Função para receber mensagens dos clientes
 def receive():
     while True:
-        data, client_adress = server.recvfrom(c.BUFF_SIZE)
-        message = data.decode()
+        received_encoded_message, client_adress = server.recvfrom(c.BUFF_SIZE)
+        checksum = calculate_checksum(received_encoded_message)
+        message = received_encoded_message.decode()
         
         messages_broadcast.put((message, client_adress))
 
-        print("Received data: " + message)
+        print(f"Received message: {message}, checksum {checksum}")
 
 def broadcast():
     global clients, seq_and_ack_controler
@@ -61,9 +86,9 @@ def broadcast():
                 # seq_and_ack_controler[port] = [0, 0]
                 clients_adress.append(client_adress)
             else:
-                if message_decoded == "bye":
+                if message == "bye":
                     nickname = clients.pop(port)
-                    clients_adress.pop(client_adress)
+                    clients_adress.remove(client_adress)
                 else:
                     nickname = clients[port]
 
@@ -88,7 +113,17 @@ def broadcast():
 
                     # Envia a mensagem para clientes
                     if not (client[1] == port and message_decoded.startswith("hi, meu nome eh ")):
-                        server.sendto(message_output.encode(encoding = 'ISO-8859-1'), client)
+                        message_encoded = message_output.encode(encoding = 'ISO-8859-1')
+                        msg_size = len(message_encoded)
+
+                        for fragment in range(0, msg_size, c.FRAG_SIZE):
+                            # Calcula limite do fragmento
+                            end_fragment = min(fragment + c.FRAG_SIZE, msg_size)
+                            message = message_encoded[fragment:end_fragment]
+                            checksum = calculate_checksum(message)
+                            # Envia fragmentos da mensagem para o Cliente 
+                            server.sendto(message, client)
+                            print(f"Sended data: CLIENT, fragment {fragment//c.FRAG_SIZE + 1}, checksum {checksum}")
 
                 except:
                     # Remove o cliente da lista se ocorrer um erro ao enviar a mensagem
