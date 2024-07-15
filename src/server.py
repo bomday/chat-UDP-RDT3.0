@@ -73,24 +73,6 @@ def receive():
 
         checksum_check = calculate_checksum(message_received) # Calcula checksum da mensagem recebida
         message = message_received.decode() # Decodifica mensagem
-
-        # Inclusão ou conferência de cliente 
-        if client_adress not in clients_adress:
-            nickname = message[16:] 
-            clients[port] = nickname
-            seq_and_ack_controler[port] = [0, 0]
-            ack_received_controler[port] = False
-            clients_adress.append(client_adress)
-        else:
-            if message == "bye":
-                nickname = clients.pop(port)
-                clients_adress.remove(client_adress)
-            else:
-                nickname = clients[port]
-
-        clients_msg_received[port] = [[] for i in range(frag_count)]
-        seq = seq_and_ack_controler[port][0]
-        ack = seq_and_ack_controler[port][1]
         
         # Confere recebimento de ack 
         if message == '':
@@ -110,17 +92,43 @@ def receive():
 
         # Confere recebimento de pacote
         else:
-            # Confere se é checksum e pacote esperado
-            if (checksum_check == checksum) and (seq_recv == ack):
-                clients_msg_received[port][frag_index].append(message) # Adiciona mensagem recebida a lista de fragmentos para mensagem completa se não for pacote duplicado
-                print("Recebeu pacote")
-                seq_and_ack_controler[port][1] = 1 if (ack == 0) else 0 # Alterna o ack para próximo pacote
+            if message == 'SYN':
+                print('Recebeu SYN... Enviando SYN-ACK')
+                message_ack = 'SYN-ACK'
+                # Estabelece seq num e ack apenas para envio de 'SYN-ACK'
+                seq = 0
+                ack = 0 
             else:
-                print('Recebeu pacote corrompido ou duplicado')
-                # Alterna o ack para pedir reenvio de pacote
-                ack = 1 if (ack == 0) else 0
+                # Inclusão ou conferência de cliente 
+                if client_adress not in clients_adress:
+                    nickname = message[16:] 
+                    clients[port] = nickname
+                    seq_and_ack_controler[port] = [0, 0]
+                    ack_received_controler[port] = False
+                    clients_adress.append(client_adress)
+                else:
+                    if message == "bye":
+                        nickname = clients.pop(port)
+                        clients_adress.remove(client_adress)
+                    else:
+                        nickname = clients[port]
+
+                clients_msg_received[port] = [[] for i in range(frag_count)]
+                seq = seq_and_ack_controler[port][0]
+                ack = seq_and_ack_controler[port][1]
+
+                # Confere se é checksum e pacote esperado
+                if (checksum_check == checksum) and (seq_recv == ack):
+                    clients_msg_received[port][frag_index].append(message) # Adiciona mensagem recebida a lista de fragmentos para mensagem completa se não for pacote duplicado
+                    print("Recebeu pacote")
+                    seq_and_ack_controler[port][1] = 1 if (ack == 0) else 0 # Alterna o ack para próximo pacote
+                else:
+                    print('Recebeu pacote corrompido ou duplicado')
+                    # Alterna o ack para pedir reenvio de pacote
+                    ack = 1 if (ack == 0) else 0
             
-            message_ack = ''
+                message_ack = ''
+
             message_ack_enconded = message_ack.encode()
             checksum = calculate_checksum(message_ack_enconded) # Calcula checksum
             header = struct.pack('!IIIII', 0, 1, seq, ack, checksum) # Estrutura o cabeçalho do pacote
@@ -129,12 +137,13 @@ def receive():
             server.sendto(pack, client_adress)
             print('Enviou pacote de reconhecimento')
 
-            # Confere se lista com fragmentos da mensagem está completa
-            if not any(isinstance(sublist, list) and len(sublist) == 0 for sublist in clients_msg_received[port]):
-                joined_msg = ''.join(sum(clients_msg_received[port], []))
-                print('BROADCAST SERVER')
-                messages_broadcast.put((joined_msg, nickname, client_adress))
-                clients_msg_received[port] = []
+            if message != 'SYN':
+                # Confere se lista com fragmentos da mensagem está completa
+                if not any(isinstance(sublist, list) and len(sublist) == 0 for sublist in clients_msg_received[port]):
+                    joined_msg = ''.join(sum(clients_msg_received[port], []))
+                    print('BROADCAST SERVER')
+                    messages_broadcast.put((joined_msg, nickname, client_adress))
+                    clients_msg_received[port] = []
 
 # Função para enviar mensagens aos clientes
 def broadcast():
