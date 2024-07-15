@@ -84,12 +84,12 @@ def receive():
         message = message_received.decode() # Decodifica mensagem
 
         # Confere recebimento de ack
-        if message == '':
+        if message == '' or message == 'SYN-ACK':
             # Desativar o timeout após receber ack da mensagem
             client.settimeout(None)
 
             # Confere se é checksum e ack esperado
-            if (checksum_check == checksum) and (seq == ack_recv):
+            if checksum_check == checksum and seq == ack_recv and message != 'SYN-ACK':
                 # Alterna o seq num para próximo pacote
                 seq = 1 if (seq == 0) else 0 
 
@@ -163,45 +163,70 @@ while True:
         print("Comando inválido!")
 
     else:
-        # Separa mensagem em fragmentos para envio de pacotes
+        # Three way handshake
         if message.startswith("hi, meu nome eh "):
-            nickname = message[16:] 
-            is_conected = True 
+            message_syn_ack = 'SYN'
+            message_syn_ack_enconded = message_syn_ack.encode()
+            checksum = calculate_checksum(message_syn_ack_enconded) # Calcula checksum
+            header = struct.pack('!IIIII', 0, 1, seq, ack, checksum) # Estrutura o cabeçalho do pacote
+            pack = header + message_syn_ack_enconded
 
-        # Calcula número de fragmentos da mensagem
-        frag_count = msg_size//c.FRAG_SIZE + 1
-        # Calcula índice de pacotes para garantir entrega na ordem
-        frag_index = 0
+            try:
+                # Ativar o timeout
+                client.settimeout(c.TIMEOUT)
 
-        for fragment in range(0, msg_size, c.FRAG_SIZE):
-            end_fragment = min(fragment + c.FRAG_SIZE, msg_size) # Calcula limite do fragmento
-            message = message_file[fragment:end_fragment+1] # Delimita mensagem a ser enviada no pacote
-            checksum = calculate_checksum(message) # Calcula checksum
-            header = struct.pack('!IIIII', frag_index, frag_count, seq, ack, checksum) # Estrutura o cabeçalho do pacote
-            pack = header + message
-            seq_sended = seq
+                client.sendto(pack, (client_ip, c.SERVER_ADRR[1]))
+                
+                # Aguarda receber ack da mensagem
+                while not ack_received:
+                    pass
 
-            while seq_sended == seq:
-                # Envia fragmentos da mensagem para o Servidor
-                try:
-                    # Ativar o timeout
-                    client.settimeout(c.TIMEOUT)
+                ack_received = False
+                nickname = message[16:] 
+                is_conected = True 
+                
+            except socket.timeout:
+                print("Timeout: Falha ao enviar mensagem")
+            except Exception as e:
+                print(f"Erro enviando mensagem: {e}") 
 
-                    client.sendto(pack, (client_ip, c.SERVER_ADRR[1]))
+        if is_conected:
+            # Calcula número de fragmentos da mensagem
+            frag_count = msg_size//c.FRAG_SIZE + 1
+            # Calcula índice de pacotes para garantir entrega na ordem
+            frag_index = 0
 
-                    # Aguarda receber ack da mensagem
-                    while not ack_received:
-                        pass
-                    
-                except socket.timeout:
-                    print("Timeout: Falha ao enviar mensagem")
-                except Exception as e:
-                    print(f"Erro enviando mensagem: {e}") 
-            
-            # Acrescenta índice para próximo pacote 
-            frag_index += 1
-            # Reseta ack recebido
-            ack_received = False
+            for fragment in range(0, msg_size, c.FRAG_SIZE):
+                end_fragment = min(fragment + c.FRAG_SIZE, msg_size) # Calcula limite do fragmento
+                message = message_file[fragment:end_fragment+1] # Delimita mensagem a ser enviada no pacote
+                checksum = calculate_checksum(message) # Calcula checksum
+                header = struct.pack('!IIIII', frag_index, frag_count, seq, ack, checksum) # Estrutura o cabeçalho do pacote
+                pack = header + message
+                seq_sended = seq
 
-        if message == "bye":
-            is_conected = False
+                while seq_sended == seq:
+                    # Envia fragmentos da mensagem para o Servidor
+                    try:
+                        # Ativar o timeout
+                        client.settimeout(c.TIMEOUT)
+
+                        client.sendto(pack, (client_ip, c.SERVER_ADRR[1]))
+
+                        # Aguarda receber ack da mensagem
+                        while not ack_received:
+                            pass
+                        
+                    except socket.timeout:
+                        print("Timeout: Falha ao enviar mensagem")
+                    except Exception as e:
+                        print(f"Erro enviando mensagem: {e}") 
+                
+                # Acrescenta índice para próximo pacote 
+                frag_index += 1
+                # Reseta ack recebido
+                ack_received = False
+
+            if message == "bye":
+                is_conected = False
+        else:
+            print("Tente se conectar novamente")
