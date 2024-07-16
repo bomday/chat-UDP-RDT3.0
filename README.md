@@ -67,6 +67,8 @@ Linguagem de programação Python
 
 - `Datetime`: Manipula datas e horas.
 
+- `OS`: Biblioteca para manipulação de arquivos e diretórios.
+
 - `Queue`: Aplicamos a biblioteca _tkinter_ para criar interfaces gráficas de usuário (GUI).
   
 - `Random`: Utilizado para gerar números de porta aleatórios.

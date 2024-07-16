@@ -1,4 +1,5 @@
 # Importando bibliotecas python 
+import os # Biblioteca para manipulação de arquivos e diretórios
 import socket # Cria sockets par comunicação em uma rede
 import queue # Fila para armazenar mensagens
 import struct # Possibilita empacotar e desempacotar dados binários
@@ -23,12 +24,24 @@ server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # Atribuição do endereço do servidor
 server.bind(c.SERVER_ADRR)
 
+def delete_client(client_adress, port):
+    clients_adress.remove(client_adress) # Retira ip client e porta
+    del clients[port] # Retira porta cliente e nome
+    del seq_and_ack_controler[port] # Retira porta cliente e lista com seq e ack 
+    del ack_received_controler[port] # Retira porta cliente e status de ack recebido
+    del clients_msg_received[port] # Retira dicionário com lista de fragmentos recebidos por cliente
+
 # Função responsável por salvar string em arquivo .txt
-def convert_string_to_txt(client_port, string):
+def convert_string_to_txt(client_port, nickname, string):
     global msg_count
 
+    path_folder = f'./data/server/{nickname}/'
+
+    if not os.path.exists(path_folder):
+        os.makedirs(path_folder)
+
     file_name = f'{client_port}{msg_count}'
-    path_file = f"./data/server/{file_name}.txt"
+    path_file = f"{path_folder}{file_name}.txt"
     msg_count += 1
 
     # Salvando string em arquivo .txt
@@ -98,6 +111,9 @@ def receive():
                 # Estabelece seq num e ack apenas para envio de 'SYN-ACK'
                 seq = 0
                 ack = 0 
+            elif message == 'FIN':
+                print('Recebeu FIN... Enviando FIN-ACK')
+                message_ack = 'Voce saiu da sala'
             else:
                 # Inclusão ou conferência de cliente 
                 if client_adress not in clients_adress:
@@ -107,9 +123,8 @@ def receive():
                     ack_received_controler[port] = False
                     clients_adress.append(client_adress)
                 else:
-                    if message == "bye":
-                        nickname = clients.pop(port)
-                        clients_adress.remove(client_adress)
+                    if message == "ACK":
+                        message = "bye"
                     else:
                         nickname = clients[port]
 
@@ -120,7 +135,10 @@ def receive():
                 # Confere se é checksum e pacote esperado
                 if (checksum_check == checksum) and (seq_recv == ack):
                     clients_msg_received[port][frag_index].append(message) # Adiciona mensagem recebida a lista de fragmentos para mensagem completa se não for pacote duplicado
-                    print("Recebeu pacote")
+                    if message == "bye":
+                        print('ACK de finalização recebido')
+                    else:
+                        print("Recebeu pacote")
                     seq_and_ack_controler[port][1] = 1 if (ack == 0) else 0 # Alterna o ack para próximo pacote
                 else:
                     print('Recebeu pacote corrompido ou duplicado')
@@ -129,15 +147,17 @@ def receive():
             
                 message_ack = ''
 
-            message_ack_enconded = message_ack.encode()
-            checksum = calculate_checksum(message_ack_enconded) # Calcula checksum
-            header = struct.pack('!IIIII', 0, 1, seq, ack, checksum) # Estrutura o cabeçalho do pacote
-            pack = header + message_ack_enconded
+            if message != "bye": # Se mensagem for ACK de finalização, não deve enviar outro pacote
+                message_ack_enconded = message_ack.encode()
+                checksum = calculate_checksum(message_ack_enconded) # Calcula checksum
+                header = struct.pack('!IIIII', 0, 1, seq, ack, checksum) # Estrutura o cabeçalho do pacote
+                pack = header + message_ack_enconded
 
-            server.sendto(pack, client_adress)
-            print('Enviou pacote de reconhecimento')
+                server.sendto(pack, client_adress)
 
-            if message != 'SYN':
+                print('Enviou pacote de reconhecimento')
+
+            if message != 'SYN' and message != 'FIN':
                 # Confere se lista com fragmentos da mensagem está completa
                 if not any(isinstance(sublist, list) and len(sublist) == 0 for sublist in clients_msg_received[port]):
                     joined_msg = ''.join(sum(clients_msg_received[port], []))
@@ -157,7 +177,7 @@ def broadcast():
             port = client_adress[1]
 
             # Converte string em txt
-            path_file = convert_string_to_txt(port, message)
+            path_file = convert_string_to_txt(port, nickname, message)
 
             # Lendo o conteúdo do arquivo .txt
             file = open(path_file,"rb")
@@ -167,64 +187,68 @@ def broadcast():
             # Envia a mensagem recebida para todos os clientes conectados
             for client in clients_adress: 
                 try:
-                    # Formatando mensagem para exibição
-                    if message_decoded.startswith("hi, meu nome eh "):
-                        if client == client_adress:
-                            message_output = f'Voce entrou na sala'
+                    if not (client == client_adress and message_decoded == "bye"): # Envia mensagem para cliente se não for o usuário saindo da sala
+                        # Formatando mensagem para exibição
+                        if message_decoded.startswith("hi, meu nome eh "):
+                            if client == client_adress:
+                                message_output = f'Voce entrou na sala'
+                            else:
+                                message_output = f'{nickname} entrou na sala'
+                        elif message_decoded == "bye":
+                            message_output = f'{nickname} saiu da sala'
                         else:
-                            message_output = f'{nickname} entrou na sala'
-                    elif message_decoded == "bye":
-                        message_output = f'{nickname} saiu da sala'
-                    else:
-                        message_output = f'{ip}:{port}/~{nickname}: {message_decoded} {current_time_and_date}'
+                            message_output = f'{ip}:{port}/~{nickname}: {message_decoded} {current_time_and_date}'
 
-                    message_encoded = message_output.encode(encoding = 'ISO-8859-1')
-                    msg_size = len(message_encoded)
+                        message_encoded = message_output.encode(encoding = 'ISO-8859-1')
+                        msg_size = len(message_encoded)
 
-                    port_send = client[1]
-                    seq = seq_and_ack_controler[port_send][0]
-                    ack = seq_and_ack_controler[port_send][1]
+                        port_send = client[1]
+                        seq = seq_and_ack_controler[port_send][0]
+                        ack = seq_and_ack_controler[port_send][1]
 
-                    # Calcula número de fragmentos da mensagem
-                    frag_count = msg_size//c.FRAG_SIZE + 1
-                    # Calcula índice de pacotes para garantir entrega na ordem
-                    frag_index = 0
+                        # Calcula número de fragmentos da mensagem
+                        frag_count = msg_size//c.FRAG_SIZE + 1
+                        # Calcula índice de pacotes para garantir entrega na ordem
+                        frag_index = 0
 
-                    for fragment in range(0, msg_size, c.FRAG_SIZE):
-                        end_fragment = min(fragment + c.FRAG_SIZE, msg_size) # Calcula limite do fragmento
-                        message = message_encoded[fragment:end_fragment+1] # Delimita mensagem a ser enviada no pacote
-                        checksum = calculate_checksum(message) # Calcula checksum
-                        header = struct.pack('!IIIII', frag_index, frag_count, seq, ack, checksum) # Estrutura o cabeçalho do pacote
-                        pack = header + message
+                        for fragment in range(0, msg_size, c.FRAG_SIZE):
+                            end_fragment = min(fragment + c.FRAG_SIZE, msg_size) # Calcula limite do fragmento
+                            message = message_encoded[fragment:end_fragment+1] # Delimita mensagem a ser enviada no pacote
+                            checksum = calculate_checksum(message) # Calcula checksum
+                            header = struct.pack('!IIIII', frag_index, frag_count, seq, ack, checksum) # Estrutura o cabeçalho do pacote
+                            pack = header + message
 
-                        while seq_and_ack_controler[port_send][0] == seq:
-                            # Envia fragmentos da mensagem para o Cliente
-                            try:
-                                # Ativar o timeout
-                                server.settimeout(c.TIMEOUT)
+                            while seq_and_ack_controler[port_send][0] == seq:
+                                # Envia fragmentos da mensagem para o Cliente
+                                try:
+                                    # Ativar o timeout
+                                    server.settimeout(c.TIMEOUT)
 
-                                print(f"Envio de pacote para {clients[port_send]}")
-                                server.sendto(pack, client)
+                                    print(f"Envio de pacote para {clients[port_send]}")
+                                    server.sendto(pack, client)
 
-                                # Aguarda receber ack da mensagem
-                                while not ack_received_controler[port_send]:
-                                    pass
-                                
-                            except socket.timeout:
-                                print("Timeout: Falha ao enviar mensagem")
-                            except Exception as e:
-                                print(f"Erro enviando mensagem: {e}") 
-                        
-                        # Acrescenta índice para próximo pacote 
-                        frag_index += 1
-                        # Reseta ack recebido
-                        for status in ack_received_controler:
-                            ack_received_controler[status] = False
+                                    # Aguarda receber ack da mensagem
+                                    while not ack_received_controler[port_send]:
+                                        pass
+                                    
+                                except socket.timeout:
+                                    print("Timeout: Falha ao enviar mensagem")
+                                except Exception as e:
+                                    print(f"Erro enviando mensagem: {e}") 
+                            
+                            # Acrescenta índice para próximo pacote 
+                            frag_index += 1
+                            # Reseta ack recebido
+                            for status in ack_received_controler:
+                                ack_received_controler[status] = False
 
                 except:
                     # Remove o cliente da lista se ocorrer um erro ao enviar a mensagem
-                    clients.pop(client[0])
-                    clients_adress.remove(client)
+                    delete_client(client_adress, port)
+
+            # Exclui dados do usuário que sairá da sala
+            if message_decoded == "bye":
+                delete_client(client_adress, port)
 
 # Inicia uma thread para as funções de recebimento e broadcast
 receive_tread = threading.Thread(target=receive)
