@@ -8,6 +8,7 @@ Projeto composto por duas etapas:
 1. Desenvolvimento de uma ferramenta de troca de arquivos .txt e reverberação disso em um chat de mensagens, utilizando comunicação com UDP;
 2. Implementação de um protocolo de transferência confiável ao chat básico de troca de mensagens já feito, utilizando UDP e o método RDT 3.0 apresentado em sala de aula.
 ```
+> Baseado em um projeto da disciplina de Redes de Computadores do curso de Sistemas de Informação da UFPE.
 
 <details>
   <summary>Tabela de Conteúdos</summary>
