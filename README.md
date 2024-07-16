@@ -34,7 +34,7 @@ Antes de começar, verifique se você atendeu aos seguintes requisitos:
 * Clone o projeto e abra em seu editor de código favorito;
 * Certifique que você está com o `python 3.10+` instalado;
 * Certifique que você está com todos os plugins, nescessários para rodar um projeto python, instalados em seu editor de código;
-* Inicialmente, você deve abrir seu terminal na pasta `real-time-udp-chat`;
+* Inicialmente, você deve abrir seu terminal na pasta `chat-udp-rdt3.0`;
 * Em seguida, você deve executar o arquivo `server.py` nesse terminal.
 * Para conectar um usuário ao chat, execute o arquivo `client.py` em um teminal separado (esse terminal também deve ser aberto na pasta `real-time-upd-chat`)
 
